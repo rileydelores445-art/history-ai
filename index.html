@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>历史沙盘 · 教师控制台</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    <style>
+        /* 这里保留你原有的精美样式，以下为功能核心样式 */
+        body { background: #0d0a05; color: #f2e8d0; font-family: serif; padding: 20px; }
+        .panel { border: 1px solid #c9a84c; padding: 20px; margin-bottom: 20px; border-radius: 8px; }
+        button { background: #9b2226; color: white; border: none; padding: 10px 20px; cursor: pointer; margin: 5px; }
+        #qr-container { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; text-align: center; color: black; border: 5px solid #c9a84c; }
+        .stats { font-size: 1.2em; color: #c9a84c; }
+    </style>
+</head>
+<body>
+    <h1>📜 历史沙盘：林则徐虎门销烟 (教师端)</h1>
+    
+    <div class="panel">
+        <h3>第一步：开启课堂</h3>
+        <button onclick="showQR()">显示学生参与二维码</button>
+        <button onclick="resetData()" style="background:#444">清空当前数据</button>
+    </div>
+
+    <div class="panel">
+        <h3>第二步：实时数据 (手动刷新)</h3>
+        <button onclick="refreshData()">🔄 刷新学生投票 & 论点</button>
+        <div id="vote-result" class="stats">等待数据...</div>
+        <div id="args-list" style="margin-top:10px; font-style: italic; color: #aaa;"></div>
+    </div>
+
+    <div class="panel">
+        <h3>第三步：AI 决策助手</h3>
+        <div id="ai-context">当前场景：林则徐面临列强压力，全班倾向于：<span id="trend">尚未统计</span></div>
+        <button onclick="askAI()">咨询“道光皇帝” (AI)</button>
+        <div id="ai-response" style="border-left: 3px solid #9b2226; padding-left: 15px; margin-top: 15px;"></div>
+    </div>
+
+    <div id="qr-container" onclick="this.style.display='none'">
+        <p>请学生扫描下方二维码参与</p>
+        <canvas id="qrcode"></canvas>
+        <p style="font-size: 12px;">(点击任意处关闭)</p>
+    </div>
+
+    <script>
+        // 自动生成学生端的 URL
+        const studentUrl = window.location.origin + '/vote.html';
+
+        function showQR() {
+            const container = document.getElementById('qr-container');
+            container.style.display = 'block';
+            QRCode.toCanvas(document.getElementById('qrcode'), studentUrl, { width: 250 });
+        }
+
+        async function refreshData() {
+            const res = await fetch('/api/session', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ action: 'get_results' })
+            });
+            const data = await res.json();
+            
+            // 更新投票展示
+            const v = data.votes || {};
+            const opt1 = v.opt1 || 0;
+            const opt2 = v.opt2 || 0;
+            document.getElementById('vote-result').innerText = `主战: ${opt1} 票 | 主和: ${opt2} 票`;
+            document.getElementById('trend').innerText = opt1 > opt2 ? "强硬销烟" : "委曲求全";
+
+            // 更新论点展示
+            document.getElementById('args-list').innerHTML = "学生观点汇总：<br>" + (data.args || []).join('<br>');
+        }
+
+        async function askAI() {
+            const responseDiv = document.getElementById('ai-response');
+            responseDiv.innerText = "正在请旨中...";
+            
+            const trend = document.getElementById('trend').innerText;
+            const res = await fetch('/api/ai', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    messages: [
+                        {role: "system", content: "你是一位历史学家，现在模拟道光皇帝。请根据班级选择给出评价。不超过100字。"},
+                        {role: "user", content: `当前全班同学的投票结果倾向于：${trend}。请你评价这个选择并给出下一步指示。`}
+                    ]
+                })
+            });
+            const data = await res.json();
+            responseDiv.innerText = data.choices[0].message.content;
+        }
+
+        async function resetData() {
+            if(confirm("确定清空所有投票和论点吗？")) {
+                await fetch('/api/session', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ action: 'reset' })
+                });
+                alert("已重置");
+                refreshData();
+            }
+        }
+    </script>
+</body>
+</html>
