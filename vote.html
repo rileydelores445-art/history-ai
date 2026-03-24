@@ -1,62 +1,59 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>历史沙盘 · 学生投票</title>
-    <style>
-        body { background: #0d0a05; color: #f2e8d0; font-family: sans-serif; text-align: center; padding: 40px 20px; }
-        .choice-btn { 
-            display: block; width: 100%; padding: 20px; margin: 15px 0; 
-            background: #1c1408; border: 1px solid #c9a84c; color: #f2e8d0;
-            font-size: 1.2em; border-radius: 8px;
-        }
-        .choice-btn:active { background: #c9a84c; color: #0d0a05; }
-        input { width: 100%; padding: 10px; margin-top: 20px; background: #000; border: 1px solid #444; color: #fff; }
-    </style>
-</head>
-<body>
-    <h2>🏛️ 虎门销烟：你的抉择</h2>
-    <p>面对英商挑衅，你支持：</p>
-    
-    <button class="choice-btn" onclick="vote('opt1')">🔥 坚决销烟，绝不退让</button>
-    <button class="choice-btn" onclick="vote('opt2')">⚖️ 暂缓销烟，寻求外交</button>
+/* ── 修改原有的提交函数 ── */
 
-    <div style="margin-top: 40px;">
-        <p>提交你的理由（论点）：</p>
-        <input id="arg-input" type="text" placeholder="输入你的看法 (不少于10字)">
-        <button onclick="submitArg()" style="margin-top:10px; background:#c9a84c; color:black; padding:10px 20px; border:none; width:100%">提交论点</button>
-    </div>
+// 1. 提交投票
+async function subVote() {
+  if(!selId) return;
+  const sb = document.getElementById('sb'); // 提交按钮
+  sb.disabled = true;
+  sb.textContent = '呈递中…';
 
-    <script>
-        async function vote(id) {
-            const res = await fetch('/api/session', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ 
-                    action: 'vote', 
-                    payload: { optionId: id } 
-                })
-            });
-            const data = await res.json();
-            if(data.ok) alert("抉择已记录！");
-        }
+  try {
+    const r = await fetch('/api/session', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ 
+        action: 'vote', 
+        payload: { optionId: selId } 
+      })
+    });
+    const d = await r.json();
+    if(d.ok) {
+      localStorage.setItem(KEY_C, selId);
+      myChoice = selId;
+      tick(); // 调用你原有的投票成功反馈
+    } else {
+      throw new Error();
+    }
+  } catch(e) {
+    sb.disabled = false;
+    sb.textContent = '确 认 选 择';
+    alert('网络异常，请重试');
+  }
+}
 
-        async function submitArg() {
-            const text = document.getElementById('arg-input').value;
-            if(text.length < 10) return alert("请写下更有力的论据");
+// 2. 提交论点
+async function subArg() {
+  const el = document.getElementById('at'); // 输入框
+  const txt = el.value.trim();
+  if(txt.length < 10) return;
+  
+  const sb = document.getElementById('sb_arg') || document.querySelector('.arg-submit-btn'); // 适配你的按钮
+  if(sb) sb.disabled = true;
 
-            await fetch('/api/session', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ 
-                    action: 'submit_arg', 
-                    payload: { text: text } 
-                })
-            });
-            alert("论点已上呈！");
-            document.getElementById('arg-input').value = "";
-        }
-    </script>
-</body>
-</html>
+  try {
+    await fetch('/api/session', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ 
+        action: 'submit_arg', 
+        payload: { text: txt } 
+      })
+    });
+    alert('论点已上呈！');
+    el.value = '';
+    // 触发你原有的成功样式
+  } catch(e) {
+    alert('提交失败，请重试');
+    if(sb) sb.disabled = false;
+  }
+}
